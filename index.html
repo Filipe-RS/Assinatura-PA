@@ -98,10 +98,9 @@ canvas{
   padding:20px 20px 18px; box-shadow:0 10px 26px var(--shadow);
 }
 .card-t{
-  display:flex; align-items:center; gap:10px; margin:0 0 16px;
-  font-size:12px; text-transform:uppercase; letter-spacing:1.3px; color:var(--gold);
+  margin:0 0 16px; font-size:12px; text-transform:uppercase;
+  letter-spacing:1.3px; color:var(--gold);
 }
-.card-t::before{ content:''; width:18px; height:2px; background:var(--gold); border-radius:2px; flex:none }
 .fgrid{ display:grid; gap:12px; grid-template-columns:1fr }
 @media (min-width:700px){ .fgrid.two{ grid-template-columns:1fr 1fr } }
 .f{ display:block }
@@ -267,9 +266,9 @@ body.welcome-open{ overflow:hidden }
     <div class="whead">
       <img id="wbrand" alt="PMMG">
       <div>
-        <h2>Gerador de Assinatura — PMMG</h2>
+        <h2>Gerador de Assinatura</h2>
         <p>Selecione a sua unidade para começar. O escudo correspondente já vem preenchido
-           na assinatura — depois é só ajustar os textos e salvar a imagem.</p>
+           na assinatura.</p>
       </div>
     </div>
     <div class="wbody" id="wgroups"></div>
@@ -305,8 +304,8 @@ body.welcome-open{ overflow:hidden }
     <div class="stagebar">
       <span class="cap" id="cap"></span>
       <div class="btnrow">
-        <button class="btn" id="dlpng">Salvar PNG</button>
-        <button class="btn primary" id="dljpg">⬇ Salvar JPEG</button>
+        <button class="btn" id="dljpg">Salvar JPEG</button>
+        <button class="btn primary" id="dlpng">Salvar PNG</button>
       </div>
     </div>
   </section>
@@ -383,6 +382,16 @@ body.welcome-open{ overflow:hidden }
         <button data-v="center">Centro</button>
         <button data-v="right">Direita</button>
       </div>
+      <label class="lbl">Tamanho do arquivo salvo</label>
+      <div class="seg" id="expscale">
+        <button data-v="15">15%</button>
+        <button data-v="25">25%</button>
+        <button data-v="50" class="on">50%</button>
+        <button data-v="75">75%</button>
+        <button data-v="100">100%</button>
+        <button data-v="150">150%</button>
+        <button data-v="200">200%</button>
+      </div>
     </article>
 
     <article class="card wide">
@@ -399,9 +408,8 @@ body.welcome-open{ overflow:hidden }
   </section>
 
   <p class="foot">
-    Arquivo único e offline: envie este <b>.html</b> para quem precisar — a pessoa abre no navegador,
-    escolhe a unidade, edita e salva a imagem, sem instalar nada.<br>
-    As alterações ficam guardadas no próprio navegador de cada um.
+    Preencha os dados, escolha o modelo e clique em <b>Salvar PNG</b> para baixar a sua assinatura.<br>
+    As informações ficam guardadas neste navegador para a próxima vez que você abrir.
   </p>
 
 </main>
@@ -421,6 +429,7 @@ const state = {
   alignNome: 'padrao',
   alignEnd: 'padrao',
   shscale: 1,
+  expscale: 0.5,                 // tamanho do arquivo salvo (1 = original)
   nome: 'NOME COMPLETO, (POSTO/GRADUAÇÃO) PM',
   funcao: 'FUNÇÃO',
   end1: 'ENDEREÇO COMPLETO ',
@@ -431,7 +440,7 @@ const state = {
 // ---------- persistência da última edição ----------
 const STORE_KEY = 'assinatura_pmmg_v6';
 const SAVE_KEYS = ['layout','shield','theme','colNome','colEnd','alignNome','alignEnd',
-                   'shscale','nome','funcao','end1','end2','end3'];
+                   'shscale','expscale','nome','funcao','end1','end2','end3'];
 const DEFAULTS = {}; SAVE_KEYS.forEach(k => DEFAULTS[k] = state[k]);
 
 state.customSrc   = null;                 // dataURL do escudo enviado
@@ -538,6 +547,9 @@ function syncUI(){
     ss.value = Math.round(state.shscale * 100);
     document.getElementById('shscalev').textContent = ss.value + '%';
   }
+  const ex = document.getElementById('expscale');
+  if(ex) [...ex.children].forEach(b =>
+    b.classList.toggle('on', (+b.dataset.v)/100 === (state.expscale || 1)));
   document.getElementById('uplname').textContent   = state.uplname;
   document.getElementById('uplbgname').textContent = state.uplbgname;
 }
@@ -623,13 +635,16 @@ function enterApp(){
   if(!trocou){ dirty = false; updateSaveMsg(); }
 }
 
+// 100% da exportacao = 70% do tamanho em que a assinatura e desenhada
+const EXPORT_BASE = 0.70;
+
 const images = {};       // id -> HTMLImageElement
 let bgImg = null;
 
 function loadImg(src){return new Promise(res=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});}
 
 const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d');   // redirecionado durante a exportação
 
 // ---------- layout definitions ----------
 const LAYOUTS = {
@@ -801,7 +816,11 @@ function draw(){
   cv.width=L.w; cv.height=L.h;
   ctx.clearRect(0,0,L.w,L.h);
   L.render(L.w,L.h);
-  document.getElementById('cap').textContent = L.label + ' — ' + L.w + '×' + L.h + ' px';
+  const ex = (state.expscale || 1) * EXPORT_BASE;
+  const ew = Math.round(L.w * ex), eh = Math.round(L.h * ex);
+  document.getElementById('cap').textContent =
+    L.label + ' — arquivo salvo: ' + ew + '×' + eh + ' px (' +
+    Math.round((state.expscale || 1) * 100) + '%)';
   markDirty();
 }
 
@@ -872,23 +891,54 @@ function buildUI(){
   // shield scale
   const ss=document.getElementById('shscale');
   ss.oninput=()=>{state.shscale=ss.value/100; document.getElementById('shscalev').textContent=ss.value+'%'; draw();};
+  // tamanho do arquivo exportado
+  const ex=document.getElementById('expscale');
+  [...ex.children].forEach(b=>{ b.onclick=()=>{
+    state.expscale = (+b.dataset.v)/100;
+    [...ex.children].forEach(x=>x.classList.toggle('on', x===b));
+    draw();
+  };});
   // export
   document.getElementById('savecfg').onclick=()=>saveState();
   document.getElementById('resetcfg').onclick=()=>resetState();
   document.addEventListener('keydown', e=>{
     if((e.ctrlKey||e.metaKey) && (e.key==='s'||e.key==='S')){ e.preventDefault(); saveState(); }
   });
-  document.getElementById('dljpg').onclick=()=>download('image/jpeg','jpg',0.95);
+  document.getElementById('dljpg').onclick=()=>download('image/jpeg','jpg',0.98);
   document.getElementById('dlpng').onclick=()=>download('image/png','png');
 }
 
+// Canvas final: a assinatura é REDESENHADA na resolução de saída
+// (texto rasterizado no tamanho final = letras nítidas, em vez de imagem encolhida).
+function exportCanvas(){
+  const ex = (state.expscale || 1) * EXPORT_BASE;
+  if(ex === 1) return cv;
+  const L = LAYOUTS[state.layout];
+  const w = Math.max(1, Math.round(L.w * ex));
+  const h = Math.max(1, Math.round(L.h * ex));
+  const c2 = document.createElement('canvas');
+  c2.width = w; c2.height = h;
+  const x2 = c2.getContext('2d');
+  x2.imageSmoothingEnabled = true;
+  x2.imageSmoothingQuality = 'high';
+  const real = ctx;
+  ctx = x2;                                  // as funções de desenho usam 'ctx'
+  try{
+    ctx.setTransform(w / L.w, 0, 0, h / L.h, 0, 0);
+    ctx.clearRect(0, 0, L.w, L.h);
+    L.render(L.w, L.h);
+  } finally {
+    ctx = real;
+  }
+  return c2;
+}
 function download(mime,ext,q){
   // JPEG needs opaque bg (canvas already opaque). Render fresh to be safe.
   draw();
-  const url = cv.toDataURL(mime, q);
+  const out = exportCanvas();
+  const url = out.toDataURL(mime, q);
   const a=document.createElement('a');
-  const uni = (SHIELDS.find(s=>s.id===state.shield)||{}).label || 'PMMG';
-  a.download = 'assinatura_'+state.layout+'.'+ext;
+  a.download = 'assinatura_'+state.layout+'_'+out.width+'x'+out.height+'.'+ext;
   a.href=url; document.body.appendChild(a); a.click(); a.remove();
 }
 
