@@ -536,7 +536,7 @@ function buildUI(){
   ss.oninput=()=>{state.shscale=ss.value/100; document.getElementById('shscalev').textContent=ss.value+'%'; draw();};
   // tamanho do arquivo exportado
   const ex=document.getElementById('expsize');
-  [...ex.children].forEach(b=>{ b.onclick=()=>{
+  if(ex) [...ex.children].forEach(b=>{ b.onclick=()=>{
     state.expmode = b.dataset.v;
     [...ex.children].forEach(x=>x.classList.toggle('on', x===b));
     draw();
@@ -607,9 +607,14 @@ async function boot(){
     await document.fonts.load('400 42px Rawline');
     await document.fonts.ready;
   }catch(e){}
-  buildUI();
-  syncUI();
-  draw();
+  try{
+    buildUI();
+    syncUI();
+    draw();
+  }catch(e){
+    // nunca deixa a tela presa em "Carregando..." por causa de um erro isolado
+    console.error('Falha ao montar a interface:', e);
+  }
   booted = true; dirty = false;
   updateSaveMsg();
   welcomeReady();

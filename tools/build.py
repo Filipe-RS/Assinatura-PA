@@ -30,6 +30,11 @@ MIME = {
 }
 
 
+def clean(ref: str) -> str:
+    """Remove a query de versao (?v=2) para resolver o arquivo em disco."""
+    return ref.split("?", 1)[0].split("#", 1)[0]
+
+
 def data_uri(path: Path) -> str:
     mime = MIME.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return "data:%s;base64,%s" % (mime, base64.b64encode(path.read_bytes()).decode("ascii"))
@@ -41,7 +46,7 @@ def inline_css_urls(css: str, css_dir: Path) -> str:
         raw = m.group(1).strip().strip("'\"")
         if raw.startswith(("data:", "http:", "https:", "//")):
             return m.group(0)
-        target = (css_dir / raw).resolve()
+        target = (css_dir / clean(raw)).resolve()
         if not target.exists():
             print("  ! aviso: nao encontrado %s" % raw)
             return m.group(0)
@@ -59,7 +64,7 @@ def main() -> int:
     # 1. CSS -> <style>
     def css_repl(m):
         href = m.group(1)
-        path = (ROOT / href).resolve()
+        path = (ROOT / clean(href)).resolve()
         print("  css   %s" % href)
         css = inline_css_urls(path.read_text(encoding="utf-8"), path.parent)
         return "<style>\n/* %s */\n%s\n</style>" % (href, css)
@@ -69,7 +74,7 @@ def main() -> int:
     # 2. JS -> <script>
     def js_repl(m):
         src = m.group(1)
-        path = (ROOT / src).resolve()
+        path = (ROOT / clean(src)).resolve()
         print("  js    %s" % src)
         return "<script>\n/* %s */\n%s\n</script>" % (src, path.read_text(encoding="utf-8"))
 
@@ -80,7 +85,7 @@ def main() -> int:
 
     def img_repl(m):
         quote, rel = m.group(1), m.group(2)
-        path = (ROOT / rel).resolve()
+        path = (ROOT / clean(rel)).resolve()
         if not path.exists():
             print("  ! aviso: imagem nao encontrada %s" % rel)
             return m.group(0)
