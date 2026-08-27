@@ -20,7 +20,7 @@ const state = {
   funcao: 'LOCAL/FUNÇÃO',
   end1: 'ENDEREÇO COMPLETO - RUA/Nº/BAIRRO/CIDADE-MG',
   end2: 'E-mail: DIGITE SEU EMAIL INSTITUCIONAL OU CAIXA VINCULADA',
-  end3: 'Telefone: DIGITE SEU TEL.'
+  end3: 'Telefone: DIGITE SEU TELEFONE.'
 };
 
 // ---------- persistência da última edição ----------
