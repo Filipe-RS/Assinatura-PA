@@ -24,7 +24,7 @@ const state = {
 };
 
 // ---------- persistência da última edição ----------
-const STORE_KEY = 'assinatura_pmmg_v6';   // vira 'assinatura_pmmg_v7'
+const STORE_KEY = 'assinatura_pmmg_v7';   // vira 'assinatura_pmmg_v7'
 const SAVE_KEYS = ['layout','shield','theme','colNome','colEnd','alignNome','alignEnd',
                    'shscale','expscale','nome','funcao','end1','end2','end3'];
 const DEFAULTS = {}; SAVE_KEYS.forEach(k => DEFAULTS[k] = state[k]);
