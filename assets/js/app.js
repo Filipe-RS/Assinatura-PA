@@ -18,9 +18,9 @@ const state = {
   expscale: 0.5,                 // tamanho do arquivo salvo (1 = original)
   nome: 'NOME COMPLETO, (POSTO/GRADUAÇÃO) PM',
   funcao: 'LOCAL/FUNÇÃO',
-  end1: 'ENDEREÇO COMPLETO ',
+  end1: 'ENDEREÇO COMPLETO - RUA/Nº/BAIRRO/CIDADE-MG',
   end2: 'E-mail: DIGITE SEU EMAIL INSTITUCIONAL OU CAIXA VINCULADA',
-  end3: 'Telefone: DIGITE SEU TELEFONE'
+  end3: 'Telefone: DIGITE SEU TEL.'
 };
 
 // ---------- persistência da última edição ----------
