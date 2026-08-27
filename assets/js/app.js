@@ -15,7 +15,7 @@ const state = {
   alignNome: 'padrao',
   alignEnd: 'padrao',
   shscale: 1,
-  expscale: 0.5,                 // tamanho do arquivo salvo (1 = original)
+  expmode: 'padrao',             // tamanho do arquivo salvo (ver EXPORT_MODES)
   nome: 'NOME COMPLETO, (POSTO/GRADUAÇÃO) PM',
   funcao: 'LOCAL/FUNÇÃO',
   end1: 'RUA/Nº/BAIRRO/CIDADE-MG',
@@ -24,9 +24,9 @@ const state = {
 };
 
 // ---------- persistência da última edição ----------
-const STORE_KEY = 'assinatura_pmmg_v7';   // vira 'assinatura_pmmg_v7'
+const STORE_KEY = 'assinatura_pmmg_v7';
 const SAVE_KEYS = ['layout','shield','theme','colNome','colEnd','alignNome','alignEnd',
-                   'shscale','expscale','nome','funcao','end1','end2','end3'];
+                   'shscale','expmode','nome','funcao','end1','end2','end3'];
 const DEFAULTS = {}; SAVE_KEYS.forEach(k => DEFAULTS[k] = state[k]);
 
 state.customSrc   = null;                 // dataURL do escudo enviado
@@ -133,9 +133,9 @@ function syncUI(){
     ss.value = Math.round(state.shscale * 100);
     document.getElementById('shscalev').textContent = ss.value + '%';
   }
-  const ex = document.getElementById('expscale');
+  const ex = document.getElementById('expsize');
   if(ex) [...ex.children].forEach(b =>
-    b.classList.toggle('on', (+b.dataset.v)/100 === (state.expscale || 1)));
+    b.classList.toggle('on', b.dataset.v === state.expmode));
   document.getElementById('uplname').textContent   = state.uplname;
   document.getElementById('uplbgname').textContent = state.uplbgname;
 }
@@ -224,6 +224,29 @@ function enterApp(){
 // 100% da exportacao = 70% do tamanho em que a assinatura e desenhada
 const EXPORT_BASE = 0.70;
 
+// ---------- tamanhos de exportacao ----------
+// scale   -> fator aplicado sobre o tamanho do layout (junto com EXPORT_BASE)
+// squeeze -> fator aplicado SO na largura (1 = mantem a proporcao original)
+// No modelo Classico (2016x544) isto resulta em 706x190 e 599x190.
+// scale  -> fator aplicado sobre o tamanho do layout (junto com EXPORT_BASE)
+// narrow  -> estreita a AREA DE DESENHO antes de exportar. Nao deforma nada:
+//            o texto e o escudo mantem o tamanho, sobra menos espaco vazio a direita.
+// No modelo Classico (2016x544) isto resulta em 706x190 e 599x190.
+const EXPORT_MODES = {
+  padrao:   { label: 'Padrao',   scale: 0.50, narrow: 1 },
+  compacto: { label: 'Compacto', scale: 0.50, narrow: 599 / 706 }
+};
+function expMode(){ return EXPORT_MODES[state.expmode] || EXPORT_MODES.padrao; }
+// area de desenho efetiva do layout no modo escolhido
+function expFrame(L){
+  const m = expMode();
+  return { w: Math.max(1, Math.round(L.w * m.narrow)), h: L.h, render: L.render, label: L.label };
+}
+function expSize(L){
+  const F = expFrame(L), k = expMode().scale * EXPORT_BASE;
+  return { w: Math.max(1, Math.round(F.w * k)), h: Math.max(1, Math.round(F.h * k)) };
+}
+
 const images = {};       // id -> HTMLImageElement
 let bgImg = null;
 
@@ -239,6 +262,26 @@ const LAYOUTS = {
   central:  { w:1500, h:820, label:'Centralizado', render:renderCentral }
 };
 
+// ---------- ajuste automatico de texto ----------
+// Impede que nome/funcao/endereco sejam cortados quando passam da largura
+// disponivel: mede as linhas do bloco e reduz a fonte do bloco inteiro pelo
+// mesmo fator, preservando a hierarquia visual entre as linhas.
+function fitRatio(lines, maxW){
+  let r = 1;
+  if(!(maxW > 0)) return r;
+  lines.forEach(([t, font]) => {
+    if(!t) return;
+    ctx.font = font;
+    const w = ctx.measureText(t).width;
+    if(w > maxW) r = Math.min(r, maxW / w);
+  });
+  return r;
+}
+function fitFont(font, r){
+  if(r >= 1) return font;
+  return font.replace(/(\d+(?:\.\d+)?)px/, (m, px) => Math.max(8, +px * r).toFixed(1) + 'px');
+}
+
 function anchor(al,x0,x1){
   if(al==='center') return [(x0+x1)/2,'center'];
   if(al==='right')  return [x1,'right'];
@@ -248,14 +291,17 @@ function anchor(al,x0,x1){
 function drawStacked(x0,x1,cy,f,aN,aE){
   ctx.textBaseline='alphabetic';
   const c=inks();
+  const maxW = x1 - x0;
+  const rN = fitRatio([[state.nome,f.nameFont],[state.funcao,f.funcFont]], maxW);
+  const rA = fitRatio([[state.end1,f.addrFont],[state.end2,f.addrFont],[state.end3,f.addrFont]], maxW);
   const total = f.gapNF + f.gapFA + 2*f.lh;   // 1st baseline -> last baseline
   const y0 = Math.round(cy - total/2 + f.n*0.35);
   const [nx,nt]=anchor(aN,x0,x1), [ex,et]=anchor(aE,x0,x1);
   ctx.textAlign=nt;
-  ctx.fillStyle=c.name; ctx.font=f.nameFont; ctx.fillText(state.nome, nx, y0);
-  ctx.fillStyle=c.sub;  ctx.font=f.funcFont; ctx.fillText(state.funcao, nx, y0+f.gapNF);
+  ctx.fillStyle=c.name; ctx.font=fitFont(f.nameFont,rN); ctx.fillText(state.nome, nx, y0);
+  ctx.fillStyle=c.sub;  ctx.font=fitFont(f.funcFont,rN); ctx.fillText(state.funcao, nx, y0+f.gapNF);
   ctx.textAlign=et;
-  ctx.fillStyle=c.addr; ctx.font=f.addrFont;
+  ctx.fillStyle=c.addr; ctx.font=fitFont(f.addrFont,rA);
   const ya=y0+f.gapNF+f.gapFA;
   ctx.fillText(state.end1, ex, ya);
   ctx.fillText(state.end2, ex, ya+f.lh);
@@ -316,16 +362,20 @@ function renderClassico(W,H){
   }
   // name + funcao top-left
   ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+  const fN='italic 600 62px Rawline, sans-serif', fF='italic 500 52px Rawline, sans-serif',
+        fA='italic 400 43px Rawline, sans-serif';
+  const ax=430, ay=292, lh=57;
+  const rN=fitRatio([[state.nome,fN],[state.funcao,fF]], W-62-24);
+  const rA=fitRatio([[state.end1,fA],[state.end2,fA],[state.end3,fA]], W-ax-24);
   ctx.fillStyle=c.name;
-  ctx.font='italic 600 62px Rawline, sans-serif';
+  ctx.font=fitFont(fN,rN);
   ctx.fillText(state.nome, 60, 92);
   ctx.fillStyle=c.sub;
-  ctx.font='italic 500 52px Rawline, sans-serif';
+  ctx.font=fitFont(fF,rN);
   ctx.fillText(state.funcao, 62, 156);
   // address to the right of shield (kept above the diagonal bars)
   ctx.fillStyle=c.addr;
-  ctx.font='italic 400 43px Rawline, sans-serif';
-  const ax=430, ay=292, lh=57;
+  ctx.font=fitFont(fA,rA);
   ctx.fillText(state.end1, ax, ay);
   ctx.fillText(state.end2, ax, ay+lh);
   ctx.fillText(state.end3, ax, ay+lh*2);
@@ -352,14 +402,18 @@ function renderClara(W,H){
     return;
   }
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  const fN='700 60px Rawline, sans-serif', fF='italic 500 48px Rawline, sans-serif',
+        fA='400 42px Rawline, sans-serif';
+  const rN=fitRatio([[state.nome,fN],[state.funcao,fF]], W-tx-40);
+  const rA=fitRatio([[state.end1,fA],[state.end2,fA],[state.end3,fA]], W-tx-40);
   ctx.fillStyle=c.name;
-  ctx.font='700 60px Rawline, sans-serif';
+  ctx.font=fitFont(fN,rN);
   ctx.fillText(state.nome, tx, 150);
   ctx.fillStyle=c.sub;
-  ctx.font='italic 500 48px Rawline, sans-serif';
+  ctx.font=fitFont(fF,rN);
   ctx.fillText(state.funcao, tx, 214);
   ctx.fillStyle=c.addr;
-  ctx.font='400 42px Rawline, sans-serif';
+  ctx.font=fitFont(fA,rA);
   const ay=308, lh=60;
   ctx.fillText(state.end1, tx, ay);
   ctx.fillText(state.end2, tx, ay+lh);
@@ -380,17 +434,21 @@ function renderCentral(W,H){
     return;
   }
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  const fN='italic 600 60px Rawline, sans-serif', fF='italic 500 48px Rawline, sans-serif',
+        fA='400 40px Rawline, sans-serif';
+  const rN=fitRatio([[state.nome,fN],[state.funcao,fF]], W-180);
+  const rA=fitRatio([[state.end1,fA],[state.end2,fA],[state.end3,fA]], W-180);
   ctx.fillStyle=c.name;
-  ctx.font='italic 600 60px Rawline, sans-serif';
+  ctx.font=fitFont(fN,rN);
   ctx.fillText(state.nome, W/2, 470);
-  ctx.font='italic 500 48px Rawline, sans-serif';
+  ctx.font=fitFont(fF,rN);
   ctx.fillStyle=c.sub;
   ctx.fillText(state.funcao, W/2, 534);
   // gold rule
   ctx.strokeStyle='#A8935B'; ctx.lineWidth=4;
   ctx.beginPath(); ctx.moveTo(W/2-260, 576); ctx.lineTo(W/2+260, 576); ctx.stroke();
   ctx.fillStyle=c.addr;
-  ctx.font='400 40px Rawline, sans-serif';
+  ctx.font=fitFont(fA,rA);
   const ay=648, lh=58;
   ctx.fillText(state.end1, W/2, ay);
   ctx.fillText(state.end2, W/2, ay+lh);
@@ -398,15 +456,14 @@ function renderCentral(W,H){
 }
 
 function draw(){
-  const L = LAYOUTS[state.layout];
+  const L0 = LAYOUTS[state.layout];
+  const L = expFrame(L0);
   cv.width=L.w; cv.height=L.h;
   ctx.clearRect(0,0,L.w,L.h);
   L.render(L.w,L.h);
-  const ex = (state.expscale || 1) * EXPORT_BASE;
-  const ew = Math.round(L.w * ex), eh = Math.round(L.h * ex);
+  const e = expSize(L0);
   document.getElementById('cap').textContent =
-    L.label + ' — arquivo salvo: ' + ew + '×' + eh + ' px (' +
-    Math.round((state.expscale || 1) * 100) + '%)';
+    L.label + ' — arquivo salvo: ' + e.w + '×' + e.h + ' px (' + expMode().label + ')';
   markDirty();
 }
 
@@ -478,9 +535,9 @@ function buildUI(){
   const ss=document.getElementById('shscale');
   ss.oninput=()=>{state.shscale=ss.value/100; document.getElementById('shscalev').textContent=ss.value+'%'; draw();};
   // tamanho do arquivo exportado
-  const ex=document.getElementById('expscale');
+  const ex=document.getElementById('expsize');
   [...ex.children].forEach(b=>{ b.onclick=()=>{
-    state.expscale = (+b.dataset.v)/100;
+    state.expmode = b.dataset.v;
     [...ex.children].forEach(x=>x.classList.toggle('on', x===b));
     draw();
   };});
@@ -497,11 +554,9 @@ function buildUI(){
 // Canvas final: a assinatura é REDESENHADA na resolução de saída
 // (texto rasterizado no tamanho final = letras nítidas, em vez de imagem encolhida).
 function exportCanvas(){
-  const ex = (state.expscale || 1) * EXPORT_BASE;
-  if(ex === 1) return cv;
-  const L = LAYOUTS[state.layout];
-  const w = Math.max(1, Math.round(L.w * ex));
-  const h = Math.max(1, Math.round(L.h * ex));
+  const L = expFrame(LAYOUTS[state.layout]);
+  const { w, h } = expSize(LAYOUTS[state.layout]);
+  if(w === L.w && h === L.h) return cv;
   const c2 = document.createElement('canvas');
   c2.width = w; c2.height = h;
   const x2 = c2.getContext('2d');

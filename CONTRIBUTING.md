@@ -8,6 +8,8 @@ cd ASSINATURA
 python3 -m http.server 8000
 ```
 
+Abra <http://localhost:8000>. Não abra o `index.html` com duplo clique: sem
+servidor HTTP o navegador bloqueia a exportação em PNG.
 
 ## Fluxo de trabalho
 
